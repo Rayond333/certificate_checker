@@ -1,0 +1,6 @@
+{
+    "DaysToExpiration": 30,
+    "EmailRecipients": "Emails split by ';' ",
+    "EmailSubject": "WARNING: SSL Certificate will expire soon",
+    "EmailSender": "DTS.Maggi@de.nestle.com"
+}
