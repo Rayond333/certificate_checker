@@ -18,6 +18,7 @@
 
     .NOTES
     Authors: Sascha Roth ND-DTS
+	Edited by: Raimund Holzinger ND-DTS
 #>
 
 # Define some variables
@@ -54,6 +55,9 @@ $expirationDate = (Get-Date).AddDays($DaysToExpiration)
 $script:logfile = "$currentFolder\Logs\$currentTime.log"
 Initialize-Log -logFolder "$currentFolder\Logs" -logFile $script:logfile
 
+$keystore = "F:\Atlassian\JIRA\jre\lib\security\cacerts"
+$storepass = "changeit"
+
 #Get certificates that will expire soon
 try {
     Import-Module Webadministration
@@ -64,12 +68,31 @@ try {
     Write-InfoLog "Get all issued certificates for those sites"
     Write-InfoLog $sites.Name
     $certs = Get-ChildItem IIS:SSLBindings | Where-Object {$sites.Name -contains $_.Sites.value }
-
+	Write-InfoLog $certs.Thumbprint
+	
+	Write-InfoLog "Get Java Truststore/ Keystore certificates"
+	$jre_keystore = keytool -list -keystore $keystore -storepass $storepass | Select-String -Pattern 'Certificate' -NotMatch
+	$arr_list = [System.Collections.ArrayList]$jre_keystore
+	
+		#Remove first 6 lines, because they are empty
+		$arr_list.RemoveRange(0, 5)
+		
+		#Format arraylist in order to be able to work with the dates
+		foreach($key in $arr_list) {
+			$obj1 = $key.Line.Replace(", 2"," 2")
+			$obj2 = $obj1.split(",")[1]
+			$dates = $obj2.substring(1)
+			#Write-InfoLog $dates
+		}
+		
+	
     Write-InfoLog "Get all certificates that will expire in $DaysToExpiration days"
-    $cert_value = Get-ChildItem CERT:LocalMachine/My | Where-Object {$certs.Thumbprint -contains $_.Thumbprint -and $_.NotAfter -lt $expirationDate}
+    $cert_value = Get-ChildItem cert:\LocalMachine #| Where-Object {$certs.Thumbprint -contains $_.Thumbprint -and $_.NotAfter -lt $expirationDate}
     #For full information on the object: $cert_value | Format-List
+	$cert_value | Format-Table 
 
     $output = $certs | ForEach-Object {$f = $_; $cert_value | Where-Object {$f.Thumbprint -eq $_.Thumbprint} | Select Thumbprint,NotAfter,Subject,@{n='SiteName';e={$f.Sites.value}}}
+	$output
 }
 catch {
     Write-ErrorLog $_
@@ -103,7 +126,8 @@ else{
     }
     
     try {
-        Send-MailMessage -To $mailTo -SmtpServer "localhost" -Subject $mailSubject -BodyAsHtml $mailBody -From $settings.EmailSender 
+        #$mailBody >> expiredCerts.txt
+		Send-MailMessage -To $mailTo -SmtpServer "localhost" -Subject $mailSubject -BodyAsHtml $mailBody -From $settings.EmailSender 
     }
     catch {
         Write-ErrorLog "Email could not be sent"
